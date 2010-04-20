@@ -1,0 +1,36 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=3068
+
+Please rate the plugin, if you like it!
+
+2. recover Manual                                       *recover-manual*
+
+Functionality
+
+When using |recovery|, it is hard to tell, what has been changed between the
+recovered file and the actual on disk version. The aim of this plugin is, to
+have an easy way to see differences, between the recovered files and the files
+restored on disk.
+
+Therefore this plugin sets up an auto command, that will create a diff buffer
+between the recovered file and the on-disk version of the same file. You can
+easily see, what has been changed and save your recovered work back to the
+file on disk.
+
+By default this plugin is enabled. To disable it, use >
+    :RecoverPluginDisable
+
+To enable this plugin again, use >
+    :RecoverPluginEnable
+
+3. ChangesPlugin Feedback                                   *recover-feedback*
+
+Feedback is always welcome. If you like the plugin, please rate it at the
+vim-page:
+http://www.vim.org/scripts/script.php?script_id=3068
+
+You can also follow the development of the plugin at github:
+http://github.com/chrisbra/Recover.vim
+
+Please don't hesitate to report any bugs to the maintainer, mentioned in the
+third line of this document.
+
