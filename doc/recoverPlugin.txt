@@ -1,7 +1,7 @@
 *recover.vim*   Show differences for recovered files
 
 Author:  Christian Brabandt <cb@256bit.org>
-Version: 0.6 Mon, 31 May 2010 22:39:40 +0200
+Version: 0.8 Tue, 01 Jun 2010 20:54:03 +0200
 
 Copyright: (c) 2009, 2010 by Christian Brabandt         
            The VIM LICENSE applies to recoverPlugin.vim and recoverPlugin.txt
@@ -52,10 +52,12 @@ holds your recovered version. If you are finished, you can close the diff
 version and close the window, by issuing |:diffoff!| and |:close| in the
 window, that contains the on-disk version of the file. Be sure to save the
 recovered version of you file and afterwards you can safely remove the swap
-file. In the recovered window, the command >
-    :DeleteSwapFile
+file.
+                                                          *FinishRecovery*
+In the recovered window, the command >
+    :FinishRecovery
 <
-to delete the swapfile, that was used to create the diff window.
+deletes the swapfile closes the diff window  and finishes everything up.
 
 If your Vim was built with |+balloon_eval|, recover.vim will also set up an
 balloon expression, that shows you, which buffer contains the recovered
@@ -83,6 +85,11 @@ third line of this document.
 
 ==============================================================================
 4. recover History                                          *recover-history*
+        0.8: Jun 01, 2010       : make :FinishRecovery more robust
+        0.7: Jun 01, 2010       : |FinishRecovery| closes the diff-window and
+                                  cleans everything up (suggestion by
+                                  David Fishburn)
+                                : :DeleteSwapFile is not needed anymore
         0.6: May 31, 2010       : |recover-feedback|
                                 : Ask to really open a diff buffer for a 
                                   file (suggestion: David Fishburn, thanks!)
