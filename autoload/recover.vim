@@ -1,11 +1,11 @@
 " Vim plugin for diffing when swap file was found
 " ---------------------------------------------------------------
 " Author: Christian Brabandt <cb@256bit.org>
-" Version: 0.13
-" Last Change: Thu, 29 Mar 2012 23:07:23 +0200
+" Version: 0.14
+" Last Change: Sat, 31 Mar 2012 13:29:07 +0200
 " Script:  http://www.vim.org/scripts/script.php?script_id=3068
 " License: VIM License
-" GetLatestVimScripts: 3068 13 :AutoInstall: recover.vim
+" GetLatestVimScripts: 3068 14 :AutoInstall: recover.vim
 "
 fu! recover#Recover(on) "{{{1
     if a:on
@@ -115,8 +115,9 @@ fu! recover#DiffRecoveredFile() "{{{1
     diffthis
     setl noswapfile buftype=nowrite bufhidden=delete nobuflisted
     let b:mod='unmodified version on-disk'
+    let swapbufnr=bufnr('')
     noa wincmd p
-    let b:swapbufnr=bufnr('')
+    let b:swapbufnr = swapbufnr
     command! -buffer RecoverPluginFinish :FinishRecovery
     command! -buffer FinishRecovery :call recover#RecoverFinish()
     if has("balloon_eval")
@@ -173,7 +174,7 @@ endfu
 
 fu! recover#BalloonExprRecover() "{{{1
     " Set up a balloon expr.
-    if exists("b:swapbufnr") && v:beval_bufnr==?b:swapbufnr
+    if exists("b:swapbufnr") && v:beval_bufnr!=?b:swapbufnr
 	return "This buffer shows the recovered and modified version of your file"
     else
 	return "This buffer shows the unmodified version of your file as it is stored on disk"
@@ -181,14 +182,14 @@ fu! recover#BalloonExprRecover() "{{{1
 endfun
 
 fu! recover#RecoverFinish() abort "{{{1
-    diffoff
     exe bufwinnr(b:swapbufnr) " wincmd w"
     diffoff
     bd!
     call delete(b:swapname)
     delcommand FinishRecovery
+    diffoff
     call s:ModifySTL(0)
-    unlet! b:swapname b:did_recovery
+    unlet! b:swapname b:did_recovery b:swapbufnr
 endfun
 
 fu! recover#AutoCmdBRP(on) "{{{1
