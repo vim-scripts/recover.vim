@@ -1,11 +1,11 @@
 " Vim plugin for diffing when swap file was found
 " ---------------------------------------------------------------
 " Author: Christian Brabandt <cb@256bit.org>
-" Version: 0.16
-" Last Change: Wed, 21 Nov 2012 22:23:21 +0100
+" Version: 0.17
+" Last Change: Sat, 16 Feb 2013 23:04:09 +0100
 " Script:  http://www.vim.org/scripts/script.php?script_id=3068
 " License: VIM License
-" GetLatestVimScripts: 3068 16 :AutoInstall: recover.vim
+" GetLatestVimScripts: 3068 17 :AutoInstall: recover.vim
 "
 fu! recover#Recover(on) "{{{1
     if a:on
@@ -110,37 +110,61 @@ fu! recover#ConfirmSwapDiff() "{{{1
     endif
     let delete = 0
     let msg = ""
-    if has("unix")
-	let bufname = shellescape(expand('%'))
+    let bufname = s:isWin() ? fnamemodify(expand('%'), ':p:8') : shellescape(expand('%'))
+    let tfile = tempname()
+    if executable('vim') && !s:isWin()
+	" Doesn't work on windows (system() won't be able to fetch the output)
 	" Capture E325 Warning message
-	let msg = system('TERM=vt100 LC_ALL=C vim -u NONE -U NONE -es -V '.bufname)
+	" Leave English output, so parsing will be easier
+	" TODO: make it work on windows.
+	if s:isWin()
+	  let wincmd = printf('-c "redir > %s|1d|:q!" ', tfile)
+	  let wincmd = printf('-c "call feedkeys(\"o\n\e:q!\n\")"')
+	endif
+	let cmd = printf("%svim -u NONE -es -V %s %s",
+	    \ (s:isWin() ? '' : 'TERM=vt100 LC_ALL=C '),
+	    \ (s:isWin() ? wincmd : ''),
+	    \ bufname)
+	let msg = system(cmd)
 	let msg = substitute(msg, '.*\(E325.*process ID:.\{-}\)\%x0d.*', '\1', '')
 	let msg = substitute(msg, "\e\\[\\d\\+C", "", "g")
+    endif
+    if has("unix") && !empty(msg) && system("uname") =~? "linux"
 	" try to get processname from pid
+	" this is Linux specific. TODO Is there a portable way to retrive this info for at least unix?
 	let pid_pat = 'process ID:\s*\zs\d\+'
 	let pid = matchstr(msg, pid_pat)+0
-	let proc = '/proc'. pid. '/status'
 	if !empty(pid) && isdirectory('/proc')
 	    let pname = 'not existing'
-	    if filereadable('/proc/'. pid. '/status')
+	    let proc = '/proc/'. pid. '/status'
+	    if filereadable(proc)
 		let pname = matchstr(readfile(proc)[0], '^Name:\s*\zs.*')
 	    endif
-	    let msg = substitute(msg, pid_pat, '& ['.pname.']', '')
+	    let msg = substitute(msg, pid_pat, '& ['.pname."]\n", '')
 	endif
+    endif
+    if executable('vim') && executable('diff') "&& s:isWin()
 	" Check, whether the files differ issue #7
-	let tfile = tempname()
-	let cmd = printf("vim -u NONE -U NONE -N -es -r %s -c ':w %s|:q!'; diff %s %s",
-		    \ shellescape(v:swapname), tfile, shellescape(bufname), tfile)
+	" doesn't work on Windows? (cmd is ok, should be executable)
+	if s:isWin()
+	    let tfile = substitute(tfile, '/', '\\', 'g')
+	endif
+	let cmd = printf("vim -u NONE -N %s -r %s -c \":w %s|:q!\" %s diff %s %s",
+		    \ (s:isWin() ? '' : '-es'), 
+		    \ (s:isWin() ? fnamemodify(v:swapname, ':p:8') : shellescape(v:swapname)),
+		    \ tfile, (s:isWin() ? '&' : '&&'),
+		    \ bufname, tfile)
 	call system(cmd)
 	" if return code of diff is zero, files are identical
-	call delete(tfile)
 	let delete = !v:shell_error
 	echo msg
     endif
+    call delete(tfile)
     if delete
 	echomsg "Swap and on-disk file seem to be identical"
     endif
-    let cmd = printf("%s", "&Diff\n&Open read-only\n&Edit\n&Quit". (delete ? "\nDele&te" : ""))
+    let cmd = printf("D&iff\n&Open Read-Only\n&Edit anyway\n&Recover\n&Quit\n&Abort%s",
+		\ ( (delete || !empty(msg)) ? "\n&Delete" : ""))
     if !empty(msg)
 	let info = 'Please choose: '
     else
@@ -148,16 +172,17 @@ fu! recover#ConfirmSwapDiff() "{{{1
     endif
     if has("gui_running") && &go !~ 'c'
 	call inputsave()
-	let p = confirm(info, cmd, (delete ? 5 : 1), 'I')
+	let p = confirm(info, cmd, (delete ? 7 : 1), 'I')
     else
 "	echo info
 "	call s:Output(cmd)
 	call inputsave()
-	let p = confirm(info, cmd, (delete ? 5 : 1), 'I')
+	let p = confirm(info, cmd, (delete ? 7 : 1), 'I')
     endif
     call inputrestore()
     let b:swapname=v:swapname
     if p == 1 || p == 3
+	" Diff or Edit Anyway
 	call s:SwapChoice('e')
 	" postpone recovering until later, for now, we are opening anyways...
 	" (this is done by s:CheckRecover()
@@ -166,13 +191,21 @@ fu! recover#ConfirmSwapDiff() "{{{1
 	    call recover#AutoCmdBRP(1)
 	endif
     elseif p == 2
+	" Open Read-Only
 	" Don't show the Recovery dialog
 	let v:swapchoice='o'
 	call <sid>EchoMsg("Found SwapFile, opening file readonly!")
 	sleep 2
     elseif p == 4
-	let v:swapchoice='a'
+	" Recover
+	let v:swapchoice='r'
     elseif p == 5
+	" Quit
+	let v:swapchoice='q'
+    elseif p == 6
+	" Abort
+	let v:swapchoice='a'
+    elseif p == 7
 	" Delete Swap file, if not different
 	call s:SwapChoice('d')
 	call <sid>EchoMsg("Found SwapFile, deleting...")
@@ -290,6 +323,10 @@ fu! s:SetSwapfile() "{{{1
 	sil setl noswapfile swapfile
     endif
 endfu
+
+fu! s:isWin() "{{{1
+    return has("win32") || has("win16") || has("win64")
+endfu
 fu! recover#BalloonExprRecover() "{{{1
     " Set up a balloon expr.
     if exists("b:swapbufnr") && v:beval_bufnr!=?b:swapbufnr
@@ -311,7 +348,7 @@ fu! recover#RecoverFinish() abort "{{{1
     call s:ModifySTL(0)
     exe bufwinnr(curbufnr) " wincmd w"
     call s:SetSwapfile()
-    unlet! b:swapname b:did_recovery b:swapbufnr
+    unlet! b:swapname b:did_recovery b:swapbufnr b:swapchoice
 endfun
 
 fu! recover#AutoCmdBRP(on) "{{{1
