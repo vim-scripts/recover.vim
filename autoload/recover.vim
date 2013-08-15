@@ -1,11 +1,11 @@
 " Vim plugin for diffing when swap file was found
 " ---------------------------------------------------------------
 " Author: Christian Brabandt <cb@256bit.org>
-" Version: 0.17
-" Last Change: Sat, 16 Feb 2013 23:04:09 +0100
+" Version: 0.18
+" Last Change: Wed, 14 Aug 2013 22:39:13 +0200
 " Script:  http://www.vim.org/scripts/script.php?script_id=3068
 " License: VIM License
-" GetLatestVimScripts: 3068 17 :AutoInstall: recover.vim
+" GetLatestVimScripts: 3068 18 :AutoInstall: recover.vim
 "
 fu! recover#Recover(on) "{{{1
     if a:on
@@ -80,6 +80,7 @@ fu! s:CheckRecover() "{{{1
 		" can trigger SwapExists autocommands again!
 		call s:SetSwapfile()
 	    endif
+	    call recover#AutoCmdBRP(0)
 	else
 	    echo "Found Swapfile '". b:swapname. "', showing diff!"
 	    call recover#DiffRecoveredFile()
@@ -91,10 +92,10 @@ fu! s:CheckRecover() "{{{1
 	    " autoopen): in this case ':wincmd l\n:0\n' must be fed to
 	    " feedkeys
 	    if bufnr('') == 1 && winnr('$') < 3
-		call feedkeys(":wincmd l\n", 't')
+		call feedkeys(":wincmd l\<cr>", 't')
 	    endif
 	    if !(v:version > 703 || (v:version == 703 && has("patch708")))
-		call feedkeys(":0\n", 't')
+		call feedkeys(":0\<cr>", 't')
 	    endif
 	endif
 	let b:did_recovery = 1
@@ -109,6 +110,8 @@ fu! recover#ConfirmSwapDiff() "{{{1
 	return
     endif
     let delete = 0
+    let do_modification_check = exists("g:RecoverPlugin_Edit_Unmodified") ? g:RecoverPlugin_Edit_Unmodified : 0
+    let not_modified = 0
     let msg = ""
     let bufname = s:isWin() ? fnamemodify(expand('%'), ':p:8') : shellescape(expand('%'))
     let tfile = tempname()
@@ -128,10 +131,14 @@ fu! recover#ConfirmSwapDiff() "{{{1
 	let msg = system(cmd)
 	let msg = substitute(msg, '.*\(E325.*process ID:.\{-}\)\%x0d.*', '\1', '')
 	let msg = substitute(msg, "\e\\[\\d\\+C", "", "g")
+	if do_modification_check
+	    let not_modified = (match(msg, "modified: no") > -1)
+	endif
     endif
     if has("unix") && !empty(msg) && system("uname") =~? "linux"
-	" try to get processname from pid
-	" this is Linux specific. TODO Is there a portable way to retrive this info for at least unix?
+	" try to get process name from pid
+	" This is Linux specific.
+	" TODO Is there a portable way to retrive this info for at least unix?
 	let pid_pat = 'process ID:\s*\zs\d\+'
 	let pid = matchstr(msg, pid_pat)+0
 	if !empty(pid) && isdirectory('/proc')
@@ -141,6 +148,9 @@ fu! recover#ConfirmSwapDiff() "{{{1
 		let pname = matchstr(readfile(proc)[0], '^Name:\s*\zs.*')
 	    endif
 	    let msg = substitute(msg, pid_pat, '& ['.pname."]\n", '')
+	    if not_modified && pname !~? 'vim'
+		let not_modified = 0
+	    endif
 	endif
     endif
     if executable('vim') && executable('diff') "&& s:isWin()
@@ -157,10 +167,12 @@ fu! recover#ConfirmSwapDiff() "{{{1
 	call system(cmd)
 	" if return code of diff is zero, files are identical
 	let delete = !v:shell_error
-	echo msg
+	if !do_modification_check
+	    echo msg
+	endif
     endif
     call delete(tfile)
-    if delete
+    if delete && !do_modification_check
 	echomsg "Swap and on-disk file seem to be identical"
     endif
     let cmd = printf("D&iff\n&Open Read-Only\n&Edit anyway\n&Recover\n&Quit\n&Abort%s",
@@ -170,16 +182,20 @@ fu! recover#ConfirmSwapDiff() "{{{1
     else
 	let info = "Swap File '". v:swapname. "' found: "
     endif
-    if has("gui_running") && &go !~ 'c'
-	call inputsave()
-	let p = confirm(info, cmd, (delete ? 7 : 1), 'I')
-    else
+"    if has("gui_running") && &go !~ 'c'
+"	call inputsave()
+"	let p = confirm(info, cmd, (modified ? 3 : delete ? 7 : 1), 'I')
+"    else
 "	echo info
 "	call s:Output(cmd)
+    if not_modified
+	let p = 3
+    else
 	call inputsave()
 	let p = confirm(info, cmd, (delete ? 7 : 1), 'I')
+    "    endif
+	call inputrestore()
     endif
-    call inputrestore()
     let b:swapname=v:swapname
     if p == 1 || p == 3
 	" Diff or Edit Anyway
