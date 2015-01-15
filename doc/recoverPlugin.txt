@@ -1,7 +1,7 @@
 *recover.vim*   Show differences for recovered files
 
 Author:  Christian Brabandt <cb@256bit.org>
-Version: 0.18 Wed, 14 Aug 2013 22:39:13 +0200
+Version: 0.19 Thu, 15 Jan 2015 21:26:55 +0100
 Copyright: (c) 2009, 2010, 2011, 2012, 2013 by Christian Brabandt
            The VIM LICENSE applies to recoverPlugin.vim and recoverPlugin.txt
            (see |copyright|) except use recoverPlugin instead of "Vim".
@@ -9,14 +9,16 @@ Copyright: (c) 2009, 2010, 2011, 2012, 2013 by Christian Brabandt
 
 
 ==============================================================================
-1. Contents                                                    *recoverPlugin*
+1. Contents                                                    *RecoverPlugin*
 
         1.  Contents.....................................: |recoverPlugin|
         2.  recover Manual...............................: |recover-manual|
         3.  recover Feedback.............................: |recover-feedback|
-        4.  recover History..............................: |recover-history|
+        4.  cvim.........................................: |cvim|
+        5.  recover History..............................: |recover-history|
 
 ==============================================================================
+                                                              *RecoverPlugin-manual*
 2. RecoverPlugin Manual                                       *recover-manual*
 
 Functionality
@@ -25,6 +27,14 @@ When using |recovery|, it is hard to tell, what has been changed between the
 recovered file and the actual on disk version. The aim of this plugin is, to
 have an easy way to see differences, between the recovered files and the files
 stored on disk.
+
+By default, it will become only active, when a swap file is detected and
+enable you to see a diff of the recovered swapfile and the actual file. You
+can now use the commands |:RecoveryPluginGet| (to get all differences from the
+recovered swapfile) and |:RecoverPluginFinish|(to discard the swapfile
+changes) and close the diff mode. Thus those two commands work to easily
+discard the changes |:RecoveryPluginFinish| or to recover |:RecoveryPluginGet| 
+from the swapfile.
 
 Therefore this plugin sets up an auto command, that will create a diff buffer
 between the recovered file and the on-disk version of the same file. You can
@@ -63,14 +73,22 @@ If you have said 'Diff', the plugin opens a new vertical splitt buffer. On the
 left side, you'll find the file as it is stored on disk and the right side
 will contain your recovered version of the file (using the found swap file).
 
-You can now use the |merge| commands to copy the contents to the buffer that
-holds your recovered version. If you are finished, you can close the diff
+When you want to keep the version from the swap file, use the command ":FinishRecovery"
+to close the diff view and delete the swapfile.
+
+When you want to discard the swap file, use the command ":1,$+1diffget" in the right window,
+then close the diff view and delete the swapfile with |:FinishRecovery|. You
+can also use the command |:RecoveryPluginGet|, which will automatically
+retrieve all changes and finish recovery.
+
+Alternatively you can use the |merge| commands to copy selected content to the buffer
+on the right that holds your recovered version. If you are finished, you can close the diff
 version and close the window, by issuing |:diffoff!| and |:close| in the
 window, that contains the on-disk version of the file. Be sure to save the
 recovered version of you file and afterwards you can safely remove the swap
 file.
-                                        *RecoverPluginFinish* *FinishRecovery*
-In the recovered window, the command >
+                                        *:RecoverPluginFinish* *:FinishRecovery*
+In the recovered buffer, the command >
     :FinishRecovery
 <
 deletes the swapfile closes the diff window and finishes everything up.
@@ -78,12 +96,19 @@ deletes the swapfile closes the diff window and finishes everything up.
 Alternatively you can also use the command >
     :RecoveryPluginFinish
 <
-                                                        *RecoverPluginHelp*
+                                                        *:RecoverPluginHelp*
 The command >
     :RecoverPluginHelp
 <
 show a small message, on what keys can be used to move to the next different
 region and how to merge the changes from one windo into the other.
+
+                                                        *:RecoverPluginGet*
+In the recovered buffer, the command >
+    :RecoverPluginGet
+<
+Will get all changes from the recovered swapfile put them in the buffer and
+finish diff mode off.
 
                                                        *RecovePlugin-config*
 If you want Vim to automatically edit any file that is open in another Vim
@@ -93,7 +118,6 @@ g:RecoverPlugin_Edit_Unmodified to 1 like this in your |.vimrc| >
     :let g:RecoverPlugin_Edit_Unmodified = 1
 <
 Note: This only works on Linux.
-
                                                         *RecoverPlugin-misc*
 If your Vim was built with |+balloon_eval|, recover.vim will also set up an
 balloon expression, that shows you, which buffer contains the recovered
@@ -107,7 +131,47 @@ have a filename (|:f|) of something like 'original file (on disk-version)'. If
 you want to save that version, use |:saveas|.
 
 ==============================================================================
-3. Plugin Feedback                                        *recover-feedback*
+3. CVIM	                                        	            	*cvim*
+
+cvim is a python script (contributed by Marcin Szamotulski) that is
+distributed together with the recoverplugin. It is located in the contrib/
+folder of the plugin source (or in the contrib/ directory of your $VIMRUNTIME/
+path (e.g. usually in ~/.vim/contrib) if you have installed the vimball
+version of the plugin)
+
+Usage:
+
+cvim [-h] [-r] [-f] [-a] {directory} ...
+
+    cvim is a python script, which can be used in a terminal to clear the
+    {directory} from |swapfile|s.  Without any switches it finds all
+    |swapfile|s then checks if a found |swapfile| is used by vim (using psutil
+    python library).  If it is not, then it reads the |swapfile| and if the
+    content matches the corresponding file it delets it.  You can get psutil
+    from:
+	http://code.google.com/p/psutil/
+
+    If a file has multiple |swapfile|s left you can exit vim with |:cq| to
+    preserve them all on disk or you will be asked to delete them/step through
+    them.  These |swapfile|s are sorted by their modification time stamp
+    (newest first).
+
+    |cvim| works with python2.6, 2.7 and python3.3.
+
+    The scripts accepts the following positional arguments:
+    {directory}         directory where to look for swap (by default current
+			directory), it can be specified multiple times.
+
+    optional arguments:
+    -h, --help           show help message and exit
+    -r, -R, --recursive  search directory recursively
+    -f, --find           only find and list |swapfile|s, it impiles -r
+    -a, --ask            ask before deleting swap files which do not differ from
+			 the file.
+
+Note: cvim might not work on Windows.
+==============================================================================
+4. Plugin Feedback                                        *recover-feedback*
 
 Feedback is always welcome. If you like the plugin, please rate it at the
 vim-page:
@@ -120,7 +184,19 @@ Please don't hesitate to report any bugs to the maintainer, mentioned in the
 third line of this document.
 
 ==============================================================================
-4. recover History                                          *recover-history*
+5. recover History                                          *recover-history*
+
+0.19: Jan 15, 2015 "{{{1
+- fix issue 29 (plugin always loaded autoload part, 
+  https://github.com/chrisbra/Recover.vim/issues/29,
+  reported by Justin Keyes, thanks!)
+- fix issue 30 (remove needless 2 second sleep,
+  https://github.com/chrisbra/Recover.vim/issues/30,
+  reported by Justin Keyes, thanks!)
+- only reset swapfile option, if the current buffer has a name
+- |:RecoverPluginGet| to easily get the recovered version into your buffer and
+  finish everything up (issue 31 https://github.com/chrisbra/Recover.vim/issues/31,
+  reported by luxigo, thanks!)
 
 0.18: Aug 14, 2013 "{{{1
 
@@ -134,6 +210,7 @@ third line of this document.
   usefule README.md file, contribted by Shubham Rao, thanks!)
 - merge issue 22 (https://github.com/chrisbra/Recover.vim/pull/22, delete BufReadPost autocommand
   contributed by Marcin Szamotulski, thanks!)
+- distribute |cvim| script (contributed by Marcin Szamotulski, thanks!)
 
 0.17: Feb 16, 2013 "{{{1
 

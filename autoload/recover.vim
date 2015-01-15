@@ -1,34 +1,12 @@
 " Vim plugin for diffing when swap file was found
 " ---------------------------------------------------------------
 " Author: Christian Brabandt <cb@256bit.org>
-" Version: 0.18
-" Last Change: Wed, 14 Aug 2013 22:39:13 +0200
+" Version: 0.19
+" Last Change: Thu, 15 Jan 2015 21:26:55 +0100
 " Script:  http://www.vim.org/scripts/script.php?script_id=3068
 " License: VIM License
-" GetLatestVimScripts: 3068 18 :AutoInstall: recover.vim
+" GetLatestVimScripts: 3068 19 :AutoInstall: recover.vim
 "
-fu! recover#Recover(on) "{{{1
-    if a:on
-	call s:ModifySTL(1)
-	if !exists("s:old_vsc")
-	    let s:old_vsc = v:swapchoice
-	endif
-	augroup Swap
-	    au!
-	    au SwapExists * nested :call recover#ConfirmSwapDiff()
-	    au BufWinEnter,InsertEnter,InsertLeave,FocusGained * 
-			\ call <sid>CheckSwapFileExists()
-	augroup END
-    else
-	augroup Swap
-	    au!
-	augroup end
-	if exists("s:old_vsc")
-	    let v:swapchoice=s:old_vsc
-	endif
-    endif
-endfu
-
 fu! s:Swapname() "{{{1
     " Use sil! so a failing redir (e.g. recursive redir call)
     " won't hurt. (https://github.com/chrisbra/Recover.vim/pull/8)
@@ -40,8 +18,8 @@ fu! s:Swapname() "{{{1
     endif
 endfu
 
-fu! s:CheckSwapFileExists() "{{{1
-    if !&swapfile 
+fu! recover#CheckSwapFileExists() "{{{1
+    if !&swapfile
 	return
     endif
 
@@ -102,6 +80,9 @@ fu! s:CheckRecover() "{{{1
 	" Don't delete the auto command yet.
 	"call recover#AutoCmdBRP(0)
     endif
+    if get(s:, 'fencview_autodetect', 0)
+	setl buftype=
+    endif
 endfun
 
 fu! recover#ConfirmSwapDiff() "{{{1
@@ -109,14 +90,16 @@ fu! recover#ConfirmSwapDiff() "{{{1
 	let v:swapchoice = b:swapchoice
 	return
     endif
+    call s:ModifySTL(1)
     let delete = 0
     let do_modification_check = exists("g:RecoverPlugin_Edit_Unmodified") ? g:RecoverPlugin_Edit_Unmodified : 0
     let not_modified = 0
     let msg = ""
     let bufname = s:isWin() ? fnamemodify(expand('%'), ':p:8') : shellescape(expand('%'))
     let tfile = tempname()
-    if executable('vim') && !s:isWin()
+    if executable('vim') && !s:isWin() && !s:isMacTerm()
 	" Doesn't work on windows (system() won't be able to fetch the output)
+	" and Mac Terminal (issue #24)  
 	" Capture E325 Warning message
 	" Leave English output, so parsing will be easier
 	" TODO: make it work on windows.
@@ -160,7 +143,7 @@ fu! recover#ConfirmSwapDiff() "{{{1
 	    let tfile = substitute(tfile, '/', '\\', 'g')
 	endif
 	let cmd = printf("vim -u NONE -N %s -r %s -c \":w %s|:q!\" %s diff %s %s",
-		    \ (s:isWin() ? '' : '-es'), 
+		    \ (s:isWin() ? '' : '-es'),
 		    \ (s:isWin() ? fnamemodify(v:swapname, ':p:8') : shellescape(v:swapname)),
 		    \ tfile, (s:isWin() ? '&' : '&&'),
 		    \ bufname, tfile)
@@ -206,12 +189,18 @@ fu! recover#ConfirmSwapDiff() "{{{1
 	if (p == 1)
 	    call recover#AutoCmdBRP(1)
 	endif
+	" disable fencview (issue #23)
+	" This is a hack, fencview doesn't allow to selectively disable it :(
+        let s:fencview_autodetect = get(g:, 'fencview_autodetect', 0)
+        if s:fencview_autodetect
+	    setl buftype=help
+	    au BufReadPost <buffer> :setl buftype=
+        endif
     elseif p == 2
 	" Open Read-Only
 	" Don't show the Recovery dialog
 	let v:swapchoice='o'
 	call <sid>EchoMsg("Found SwapFile, opening file readonly!")
-	sleep 2
     elseif p == 4
 	" Recover
 	let v:swapchoice='r'
@@ -284,6 +273,7 @@ fu! recover#DiffRecoveredFile() "{{{1
     let b:swapbufnr = swapbufnr
     command! -buffer RecoverPluginFinish :FinishRecovery
     command! -buffer FinishRecovery :call recover#RecoverFinish()
+    command! -buffer RecoverPluginGet :1,$+1diffget|:FinishRecovery
     setl modified
 endfu
 
@@ -334,7 +324,7 @@ fu! s:ModifySTL(enable) "{{{1
 endfu
 
 fu! s:SetSwapfile() "{{{1
-    if &l:swf
+    if &l:swf && !empty(bufname(''))
 	" Reset swapfile to use .swp extension
 	sil setl noswapfile swapfile
     endif
@@ -342,6 +332,9 @@ endfu
 
 fu! s:isWin() "{{{1
     return has("win32") || has("win16") || has("win64")
+endfu
+fu! s:isMacTerm() "{{{1
+    return (has("mac") || has("macunix")) && !has("gui_mac")
 endfu
 fu! recover#BalloonExprRecover() "{{{1
     " Set up a balloon expr.
@@ -359,7 +352,7 @@ fu! recover#RecoverFinish() abort "{{{1
     exe bufwinnr(b:swapbufnr) " wincmd w"
     diffoff
     bd!
-    call delete(swapname)
+    call delete(fnameescape(swapname))
     diffoff
     call s:ModifySTL(0)
     exe bufwinnr(curbufnr) " wincmd w"
